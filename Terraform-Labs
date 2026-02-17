@@ -290,3 +290,252 @@ terraform destroy
 
 cd ..
 rm -rf output-variable-lab
+
+###################################
+Lab 4 : Remote State using Amazon Simple Storage Service 
+###################################
+
+Task 1: Create a S3 Bucket on AWS Console 
+=========================================
+Create a new S3 bucket by name: yourname-terraform. Remove block public access.
+select -I acknowledge that the current settings might result in this bucket and the objects within becoming public.
+Select ACLs enabled
+select-I acknowledge that ACLs will be restored.
+enable versioning. 
+
+aws s3 ls 
+
+
+Task 2: Configure Remote State
+==============================
+cd /home/ubuntu/terraform-labs/
+wget https://s3.ap-south-1.amazonaws.com/files.cloudthat.training/devops/terraform-essentials/remote_state_lab.tar.gz
+tar -zxvf remote_state_lab.tar.gz
+cd remote-state-lab
+ls
+
+cat instance.tf
+cat vars.tf
+cat provider.tf
+
+vi backend.tf
+
+# Add the given lines, by pressing "INSERT" 
+
+terraform {
+  backend "s3" {
+    bucket = "<Replace your s3 bucket name>"
+    key    = "terraform/remotestate"
+    region = "us-east-2"
+  }
+}
+
+# save the file using "ESCAPE + :wq!"
+
+cat backend.tf
+
+terraform init
+terraform fmt
+terraform validate
+terraform plan
+terraform apply
+
+##Go to s3 bucket and open the s3 bucket open terraform/remotestate
+Click on permision and click on under acl contrl list edit 
+select read under objects. 
+select-I understand the effects of these changes on this object.
+click on save changes
+copy object url and paste in the web browser.
+you should able to access the state file.
+
+
+
+# This command shows the attributes of a single resource in the Terraform state.
+terraform state show aws_instance.terraform-remoteState
+
+# Use the "terraform destroy" command for cleaning the infrastructure used in this lab, 
+# remove the directory using rm -rf
+
+terraform destroy
+
+cd ..
+rm -rf remote-state-lab
+
+
+#######################################
+Lab 5 : Launching VPC and EC2 Instance 
+#######################################
+
+Task 1: Launching VPC and creating subnets
+==========================================
+
+cd /home/ubuntu/
+wget https://s3.ap-south-1.amazonaws.com/files.cloudthat.training/devops/terraform-essentials/lab_10_vpc_v0.13.tar.gz
+tar -xvf lab_10_vpc_v0.13.tar.gz
+
+cd lab_10_vpc/
+ls
+
+cat vpc.tf
+cat nat.tf
+cat vars.tf
+
+terraform init
+terraform plan
+terraform apply -auto-approve
+ 
+
+Task 2: Launching an EC2 Instance 
+=================================
+vi instance.tf 
+
+# Add the given lines, by pressing "INSERT" 
+
+resource "aws_instance" "example" {
+  ami           = var.AMIS[var.AWS_REGION]
+  instance_type = "t2.micro"
+  # the VPC subnet
+  subnet_id = aws_subnet.main-public-1.id
+  # the security group
+  vpc_security_group_ids = [aws_security_group.allow-ssh.id]
+  # the public SSH key
+  key_name = aws_key_pair.mykeypair.key_name
+  tags = {
+    Name = "Yourname-Lab11-ec2"
+  }
+}
+
+
+# save the file using "ESCAPE + :wq!"
+
+vi securitygroup.tf
+
+# Add the given lines, by pressing "INSERT" 
+
+resource "aws_security_group" "allow-ssh" {
+  vpc_id      = aws_vpc.main.id
+  name        = "yourname-allow-ssh"
+  description = "security group that allows ssh and all egress traffic"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "yourname-allow-ssh"
+  }
+}
+
+
+# save the file using "ESCAPE + :wq!"
+
+ssh-keygen -f mykey
+ls
+vi key.tf
+
+# Add the given lines, by pressing "INSERT" 
+
+resource "aws_key_pair" "mykeypair" {
+  key_name   = "yourname-keypair"
+  public_key = file(var.PATH_TO_PUBLIC_KEY)
+}
+
+# save the file using "ESCAPE + :wq!"
+
+vi vars.tf
+
+# Add the given lines, by pressing "INSERT" 
+# First 3 lines are already present. you can add the remaining lines.
+
+variable "AWS_REGION" {
+  default = "us-east-2"
+}
+
+variable "PATH_TO_PUBLIC_KEY" {
+  default = "mykey.pub"
+}
+
+variable "AMIS" {
+  type = map(string)
+  default = {
+    us-east-2 = "ami-059d836af932792c3"
+    us-west-2 = "ami-0a7d051a1c4b54f65"
+    eu-west-1 = "ami-04c58523038d79132"
+  }
+}
+
+
+# save the file using "ESCAPE + :wq!"
+
+terraform fmt
+terraform validate
+terraform plan
+terraform apply -auto-approve
+
+# see details of the specific resource
+terraform state show aws_instance.example | grep public_ip
+
+ssh -i mykey -l ubuntu <Your Public IP>
+
+exit
+
+
+Task 3: Connecting an EBS with EC2 Instance 
+===========================================
+
+vi instance.tf 
+
+# Add the given lines, by pressing "INSERT" 
+# First block will be already present in the file
+
+resource "aws_instance" "example" {
+  ami = var.AMIS[var.AWS_REGION]
+  instance_type = "t2.micro"
+  # the VPC subnet
+  subnet_id = aws_subnet.main-public-1.id
+  # the security group
+  vpc_security_group_ids = [aws_security_group.allow-ssh.id]
+  # the public SSH key
+  key_name = aws_key_pair.mykeypair.key_name
+  tags = {
+    Name = "yourname-Lab11-EC2"
+  }
+}
+
+resource "aws_ebs_volume" "ebs-volume-1" {
+ availability_zone = "us-east-2a"
+ size = 20
+ type = "gp2"
+ tags = {
+   Name = "Yourname extra volume"
+ }
+}
+
+resource "aws_volume_attachment" "ebs-volume-1-attachment" {
+  device_name = "/dev/xvdh"
+  volume_id = aws_ebs_volume.ebs-volume-1.id
+  instance_id = aws_instance.example.id
+} 
+
+# save the file using "ESCAPE + :wq!"
+
+terraform apply
+
+Login to ec2 dashboard. select the ec2. go to storage and see that the new volume is attached
+ssh -i mykey ubuntu@<PUBLIC IP>
+
+
+# Use the "terraform destroy" command for cleaning the infrastructure used in this lab, remove the 
+  directory using rm -rf
+
+terraform destroy -auto-approve
+
+cd ..
+rm -rf lab_10_vpc
