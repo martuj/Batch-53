@@ -539,3 +539,151 @@ terraform destroy -auto-approve
 
 cd ..
 rm -rf lab_10_vpc
+
+###################################
+Lab-6: Launching ELB with autoscaling 
+###################################
+cd /home/ubuntu/
+
+wget https://s3.ap-south-1.amazonaws.com/files.cloudthat.training/devops/terraform-essentials/lab_15_elb_with_autoscaling.tar.gz
+tar -zxvf lab_15_elb_with_autoscaling.tar.gz
+cd lab_15_elb_with_autoscaling/
+
+ls
+vi autoscaling.tf
+
+#In block resource "aws_launch_configuration" "example-launchconfig", replace below line
+user_data = "#!/bin/bash\napt-get update\napt-get -y install nginx\nMYIP=`hostname -I | awk '{print $1}' | cut -d ':' -f2`\necho '<html><h1> Welcome to terraform training </h1></html> IP address of this EC2 is' $MYIP > /var/www/html/index.html"
+
+cat elb.tf
+cat securitygroup.tf
+cat output.tf
+
+# change the tags to include your name. change the key pair name to include your name
+
+ssh-keygen -f mykey
+ls
+
+terraform init
+terraform fmt
+terraform plan
+terraform apply
+
+curl <dns_name>
+host <dns_name>
+curl <public IP of any instance>
+
+
+# Now go back to AWS console > Services > EC2 > Instances and check that two new instances are created.
+
+# Go to AWS console > Services > EC2 > Load Balancers
+
+# Go back to AWS console > Services > EC2 > Instances and terminate one of your instances 
+
+# Go back to AWS console > Services > EC2 > Load Balancers. Select your load balancer and go to description. 
+# Click on instances and verify the status (in service). 
+
+curl <dns_name>
+terraform destroy -auto-approve
+
+###################################
+Lab 7 : Creating AWS resources using terraform modules
+###################################
+
+cd /home/ubuntu/
+sudo apt install tree -y
+
+wget https://s3.ap-south-1.amazonaws.com/files.cloudthat.training/devops/terraform-essentials/terraform-modules.tar.gz
+tar -xvf terraform-modules.tar.gz
+
+cd terraform-modules
+tree
+
+# cat all files to see the module structure
+vi main.tf
+# Add the below code after block module "my_security_group"
+output "secgrpid" {
+  description = "Newly created sec grp"
+  value       = module.my_security_group.sgid
+}
+
+cat provider.tf
+# no change needed
+
+vi variables.tf 
+
+# Modify the VPC / Subnet ID / key_name
+
+-Change vpc_id to any VPC in ca-central-1 (ex:vpc-10102478)
+-Change subnet id (use available subnets from AZ a or b. ex: subnet-5189d339)
+-Change key_name to yourname-Lab12-keypair (ex: martuj-Lab12-keypair)
+
+
+variable "region" {
+    default = "ca-central-1"
+}
+
+# enter VPC id
+variable "sg_vpcid" {
+    default = "Your VPC ID"
+}
+
+variable "from_port" {
+    default = 22
+}
+
+variable "to_port" {
+    default = 22
+}
+
+# security grp name to be created
+variable  "sg_name" {
+    default = "terraform-sgp"
+}
+
+variable "ami_id" {
+    default = "ami-0e28822503eeedddc"
+}
+
+variable "ins_type" {
+    default = "t2.micro"
+}
+
+# enter a subnet id from Zone A or B
+variable sub_id {
+    default = "Your Subnet ID"
+}
+
+# add your name in key_name
+variable key_name {
+    default = "yourname-key-pair-lab9"
+}
+
+variable from_port2 {
+    default = 80
+}
+
+variable to_port2 {
+    default = 80
+}
+
+variable public_key {
+    default = "mykey.pub"
+}
+
+# Save
+
+# Create a key pair. The public key of the same will be saved into the EC2 being launched.
+ssh-keygen -f mykey
+
+terraform init
+terraform fmt
+terraform validate
+terraform plan
+terraform apply -auto-approve
+
+Self Exercise Task:
+# Add lines of code to print out the id of the new ec2 created (module.my_ec2.ec2_id)
+# You can refer to how security grp id is outputted.
+
+terraform destroy
